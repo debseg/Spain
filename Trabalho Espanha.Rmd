@@ -1,0 +1,45 @@
+---
+title: "Trabalho Espanha"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# Copiar "esp_Country_en_excel_v2.xls" para a ?rea de trabalho do R.
+# Instalar tidyverse: install.packages ("tidyverse").
+library(tidyverse)
+# Instalar read_readxl: install.packages ("readxl").
+library(readxl)
+# Instalar magrittr: install.packages ("magrittr").
+library(magrittr)
+# Instalar stringr: install.packages ("stringr").
+library(stringr)
+# Instalar "corrplot": install.packages("corrplot").
+library(corrplot)
+# Instalar "caret": install.packages("caret").
+library(caret)
+# Instalar "PerformanceAnalytics": install.packages("PerformanceAnalytics").
+library(PerformanceAnalytics)
+# Importar dados.
+dataesp <- read_excel("esp_Country_en_excel_v2.xls",sheet = "Data",skip = 3)
+# Selecionar range de dados (1970-2014).
+dataesp <- dataesp[c(3,4,15:59)]
+# Retirar missing values (NA's).
+dataesp <- na.omit(dataesp)
+# Limpar dados repetidos "current LCU","constant LCU","constant 2005","annual %","% of GDP".
+datanovo <- dplyr::filter(dataesp, !grepl("(current LCU)|(constant LCU)|(constant 2005)|(annual %)|(% of GDP)",`Indicator Name`))
+# Preparar dados para correla??o e transpor base.
+datanovo <- datanovo[,-c(1)]
+datanovo <- column_to_rownames(datanovo, var = "Indicator Code" )
+df_dataesp <- as.data.frame(t(datanovo))
+corrplot(cor(df_dataesp),method ="color" ,tl.cex = 0.25)
+rm(datanovo)
+df_dataesp$SE.PRM.AGES <- NULL
+# Encontrar correla??es muito altas (0.95)
+df_aux <- as.data.frame(cor(df_dataesp))
+nomes <- as.matrix(dimnames(subset(df_aux,abs(NY.GDP.PCAP.CD) >= 0.95,select = NY.GDP.PCAP.CD))[[1]])
+df_dataesp <- df_dataesp[ , which(names(df_dataesp) %in% nomes), drop = F]
+corrplot(cor(df_dataesp),method ="square" ,tl.cex = 0.75)
+matcor <- cor(df_dataesp)
+
+```
+
