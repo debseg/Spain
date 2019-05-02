@@ -3,43 +3,115 @@ title: "Trabalho Espanha"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+Limpeza da base de dados
+
+```{r}
+
 # Copiar "esp_Country_en_excel_v2.xls" para a ?rea de trabalho do R.
+
 # Instalar tidyverse: install.packages ("tidyverse").
 library(tidyverse)
+
 # Instalar read_readxl: install.packages ("readxl").
 library(readxl)
+
 # Instalar magrittr: install.packages ("magrittr").
 library(magrittr)
+
 # Instalar stringr: install.packages ("stringr").
 library(stringr)
+
 # Instalar "corrplot": install.packages("corrplot").
 library(corrplot)
+
 # Instalar "caret": install.packages("caret").
 library(caret)
+
 # Instalar "PerformanceAnalytics": install.packages("PerformanceAnalytics").
-library(PerformanceAnalytics)
+
+library(dplyr)
+
 # Importar dados.
 dataesp <- read_excel("esp_Country_en_excel_v2.xls",sheet = "Data",skip = 3)
+
 # Selecionar range de dados (1970-2014).
 dataesp <- dataesp[c(3,4,15:59)]
+
 # Retirar missing values (NA's).
 dataesp <- na.omit(dataesp)
+
 # Limpar dados repetidos "current LCU","constant LCU","constant 2005","annual %","% of GDP".
 datanovo <- dplyr::filter(dataesp, !grepl("(current LCU)|(constant LCU)|(constant 2005)|(annual %)|(% of GDP)",`Indicator Name`))
+
 # Preparar dados para correla??o e transpor base.
 datanovo <- datanovo[,-c(1)]
 datanovo <- column_to_rownames(datanovo, var = "Indicator Code" )
 df_dataesp <- as.data.frame(t(datanovo))
 corrplot(cor(df_dataesp),method ="color" ,tl.cex = 0.25)
 rm(datanovo)
+
+# Retirar variÃ¡vel 'SE.PRM.AGES' pois trata-se de uma constante.
 df_dataesp$SE.PRM.AGES <- NULL
+
 # Encontrar correla??es muito altas (0.95)
 df_aux <- as.data.frame(cor(df_dataesp))
 nomes <- as.matrix(dimnames(subset(df_aux,abs(NY.GDP.PCAP.CD) >= 0.95,select = NY.GDP.PCAP.CD))[[1]])
 df_dataesp <- df_dataesp[ , which(names(df_dataesp) %in% nomes), drop = F]
 corrplot(cor(df_dataesp),method ="square" ,tl.cex = 0.75)
 matcor <- cor(df_dataesp)
+
+# Analisar Multicolinearidade / RedundÃ¢ncia de VariÃ¡veis.
+df_nomes <- as.data.frame(nomes)
+df_nomes <- data.frame("Indicator Code" = df_nomes$V1)
+idcod.idnom <- inner_join(df_nomes, dataesp, by = c("Indicator.Code" = "Indicator Code"))
+idcod.bas <- idcod.idnom[,-c(2)]
+idcod.bas <- gather(idcod.bas,Ano, Valor,2:46)
+idcod.bas <- spread(idcod.bas, Indicator.Code,Valor)
+idcod.bas <- idcod.bas[,2:31]
+idcod.cor <- cor(idcod.bas)
+idcod.nom <- idcod.idnom [,-c(3:47)]
+idcod.bas$NY.GDP.MKTP.CD <- NULL #indicador é o mesmo que a variável dependente
+
+# Modelo de RegressÃ£o Linear
+modelo <- lm(NY.GDP.PCAP.CD~.,data=idcod.bas)
+summary(modelo)
+
+# Exclusao variaveis não significativas
+idcod.bas2 <- idcod.bas[-c(1,4,6,8,12,18,19,22,23,25,26,28)]
+modelo2 <- lm(NY.GDP.PCAP.CD~.,data=idcod.bas2)
+summary(modelo2)
+
+# Segunda Exclusao variaveis não significativas
+idcod.bas3 <- idcod.bas2[-c(2,6,16,17)]
+modelo3 <- lm(NY.GDP.PCAP.CD~.,data=idcod.bas3)
+summary(modelo3)
+
+# Terceira Exclusao variaveis não significativas
+idcod.bas4 <- idcod.bas3[-c(6,8,9)]
+modelo4 <- lm(NY.GDP.PCAP.CD~.,data=idcod.bas4)
+summary(modelo4)
+idcod.bas4_nomes <- as.matrix(dimnames(idcod.bas4)[[2]])
+idcod.bas4_nomes <- as.data.frame(idcod.bas4_nomes)
+idcod.bas4_nomes <- data.frame("Indicator Code" = idcod.bas4_nomes$V1)
+idcod.idnom4 <- inner_join(idcod.bas4_nomes, dataesp, by = c("Indicator.Code" = "Indicator Code"))
+idcod.idnom4 <- idcod.idnom4[,c(1:2)]
+
+# Análise dos Resíduos do modelo 4
+residuopad <- rstandard(modelo4)
+plot(idcod.bas4$EN.URB.LCTY , residuopad, ylab="Resíduos Padronizados", xlab="EN.URB.LCTY", main="Análise de Resíduos Padronizados");abline(0,0)
+plot(idcod.bas4$IS.AIR.GOOD.MT.K1 , residuopad, ylab="Resíduos Padronizados", xlab="IS.AIR.GOOD.MT.K1", main="Análise de Resíduos Padronizados");abline(0,0)
+plot(idcod.bas4$NE.CON.GOVT.CD , residuopad, ylab="Resíduos Padronizados", xlab="NE.CON.GOVT.CD", main="Análise de Resíduos Padronizados");abline(0,0)
+plot(idcod.bas4$NE.CON.PRVT.CD , residuopad, ylab="Resíduos Padronizados", xlab="NE.CON.PRVT.CD", main="Análise de Resíduos Padronizados");abline(0,0)
+plot(idcod.bas4$NE.CON.TOTL.CD , residuopad, ylab="Resíduos Padronizados", xlab="NE.CON.TOTL.CD", main="Análise de Resíduos Padronizados");abline(0,0)
+plot(idcod.bas4$NE.EXP.GNFS.CD  , residuopad, ylab="Resíduos Padronizados", xlab="NE.EXP.GNFS.CD", main="Análise de Resíduos Padronizados");abline(0,0)
+plot(idcod.bas4$NE.IMP.GNFS.CD , residuopad, ylab="Resíduos Padronizados", xlab="NE.IMP.GNFS.CD", main="Análise de Resíduos Padronizados");abline(0,0)
+plot(idcod.bas4$NY.GDS.TOTL.CD , residuopad, ylab="Resíduos Padronizados", xlab="NY.GDS.TOTL.CD", main="Análise de Resíduos Padronizados");abline(0,0)
+plot(idcod.bas4$SP.URB.TOTL, residuopad, ylab="Resíduos Padronizados", xlab="SP.URB.TOTL ", main="Análise de Resíduos Padronizados");abline(0,0)
+av4 <- aov(modelo4)
+plot(av4)
+
+# Correlação das variáveis
+cor(idcod.bas4)
 
 ```
 
